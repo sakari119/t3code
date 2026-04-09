@@ -6,13 +6,14 @@ import {
 } from "@t3tools/contracts";
 import { memo } from "react";
 import GitActionsControl from "../GitActionsControl";
-import { DiffIcon, TerminalSquareIcon } from "lucide-react";
+import { DiffIcon, GitBranchPlusIcon, TerminalSquareIcon } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
 import ProjectScriptsControl, { type NewProjectScriptInput } from "../ProjectScriptsControl";
 import { Toggle } from "../ui/toggle";
 import { SidebarTrigger } from "../ui/sidebar";
 import { OpenInPicker } from "./OpenInPicker";
+import { Button } from "../ui/button";
 
 interface ChatHeaderProps {
   activeThreadId: ThreadId;
@@ -30,12 +31,17 @@ interface ChatHeaderProps {
   diffToggleShortcutLabel: string | null;
   gitCwd: string | null;
   diffOpen: boolean;
+  parentThreadId: string | null;
+  parentThreadTitle: string | null;
+  canSpawnSubAgent: boolean;
   onRunProjectScript: (script: ProjectScript) => void;
   onAddProjectScript: (input: NewProjectScriptInput) => Promise<void>;
   onUpdateProjectScript: (scriptId: string, input: NewProjectScriptInput) => Promise<void>;
   onDeleteProjectScript: (scriptId: string) => Promise<void>;
   onToggleTerminal: () => void;
   onToggleDiff: () => void;
+  onNavigateToParentThread: (threadId: string) => void;
+  onNewSubAgent: () => void;
 }
 
 export const ChatHeader = memo(function ChatHeader({
@@ -54,12 +60,17 @@ export const ChatHeader = memo(function ChatHeader({
   diffToggleShortcutLabel,
   gitCwd,
   diffOpen,
+  parentThreadId,
+  parentThreadTitle,
+  canSpawnSubAgent,
   onRunProjectScript,
   onAddProjectScript,
   onUpdateProjectScript,
   onDeleteProjectScript,
   onToggleTerminal,
   onToggleDiff,
+  onNavigateToParentThread,
+  onNewSubAgent,
 }: ChatHeaderProps) {
   return (
     <div className="@container/header-actions flex min-w-0 flex-1 items-center gap-2">
@@ -80,6 +91,26 @@ export const ChatHeader = memo(function ChatHeader({
           <Badge variant="outline" className="shrink-0 text-[10px] text-amber-700">
             No Git
           </Badge>
+        )}
+        {parentThreadId && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Badge
+                  variant="outline"
+                  className="shrink-0 cursor-pointer text-[10px] text-blue-600 hover:bg-accent"
+                  onClick={() => onNavigateToParentThread(parentThreadId)}
+                >
+                  Sub-agent
+                </Badge>
+              }
+            />
+            <TooltipPopup side="bottom">
+              {parentThreadTitle
+                ? `Sub-agent of: ${parentThreadTitle}`
+                : "Navigate to parent thread"}
+            </TooltipPopup>
+          </Tooltip>
         )}
       </div>
       <div className="flex shrink-0 items-center justify-end gap-2 @3xl/header-actions:gap-3">
@@ -102,6 +133,24 @@ export const ChatHeader = memo(function ChatHeader({
           />
         )}
         {activeProjectName && <GitActionsControl gitCwd={gitCwd} activeThreadId={activeThreadId} />}
+        {canSpawnSubAgent && (
+          <Tooltip>
+            <TooltipTrigger
+              render={
+                <Button
+                  size="icon-xs"
+                  variant="outline"
+                  className="shrink-0"
+                  onClick={onNewSubAgent}
+                  aria-label="New sub-agent thread"
+                >
+                  <GitBranchPlusIcon className="size-3" />
+                </Button>
+              }
+            />
+            <TooltipPopup side="bottom">New sub-agent thread</TooltipPopup>
+          </Tooltip>
+        )}
         <Tooltip>
           <TooltipTrigger
             render={

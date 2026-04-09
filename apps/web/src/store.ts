@@ -203,6 +203,7 @@ function mapThread(thread: OrchestrationThread): Thread {
     pendingSourceProposedPlan: thread.latestTurn?.sourceProposedPlan,
     branch: thread.branch,
     worktreePath: thread.worktreePath,
+    parentThreadId: thread.parentThreadId,
     turnDiffSummaries: thread.checkpoints.map(mapTurnDiffSummary),
     activities: thread.activities.map((activity) => ({ ...activity })),
   };
@@ -223,6 +224,7 @@ function toThreadShell(thread: Thread): ThreadShell {
     updatedAt: thread.updatedAt,
     branch: thread.branch,
     worktreePath: thread.worktreePath,
+    parentThreadId: thread.parentThreadId,
   };
 }
 
@@ -261,6 +263,7 @@ function buildSidebarThreadSummary(thread: Thread): SidebarThreadSummary {
     latestTurn: thread.latestTurn,
     branch: thread.branch,
     worktreePath: thread.worktreePath,
+    parentThreadId: thread.parentThreadId,
     latestUserMessageAt: getLatestUserMessageAt(thread.messages),
     hasPendingApprovals: derivePendingApprovals(thread.activities).length > 0,
     hasPendingUserInput: derivePendingUserInputs(thread.activities).length > 0,
@@ -287,6 +290,7 @@ function sidebarThreadSummariesEqual(
     left.latestTurn === right.latestTurn &&
     left.branch === right.branch &&
     left.worktreePath === right.worktreePath &&
+    left.parentThreadId === right.parentThreadId &&
     left.latestUserMessageAt === right.latestUserMessageAt &&
     left.hasPendingApprovals === right.hasPendingApprovals &&
     left.hasPendingUserInput === right.hasPendingUserInput &&
@@ -309,7 +313,8 @@ function threadShellsEqual(left: ThreadShell | undefined, right: ThreadShell): b
     left.archivedAt === right.archivedAt &&
     left.updatedAt === right.updatedAt &&
     left.branch === right.branch &&
-    left.worktreePath === right.worktreePath
+    left.worktreePath === right.worktreePath &&
+    left.parentThreadId === right.parentThreadId
   );
 }
 
@@ -1104,6 +1109,7 @@ export function applyOrchestrationEvent(state: AppState, event: OrchestrationEve
         interactionMode: event.payload.interactionMode,
         branch: event.payload.branch,
         worktreePath: event.payload.worktreePath,
+        parentThreadId: event.payload.parentThreadId,
         latestTurn: null,
         createdAt: event.payload.createdAt,
         updatedAt: event.payload.updatedAt,

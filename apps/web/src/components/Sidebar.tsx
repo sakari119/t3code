@@ -3,6 +3,7 @@ import {
   ArrowUpDownIcon,
   ChevronRightIcon,
   FolderIcon,
+  GitBranchPlusIcon,
   GitPullRequestIcon,
   PlusIcon,
   SettingsIcon,
@@ -378,6 +379,21 @@ function SidebarThreadRow(props: SidebarThreadRowProps) {
         }}
       >
         <div className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
+          {thread.parentThreadId && (
+            <Tooltip>
+              <TooltipTrigger
+                render={
+                  <span
+                    aria-label="Sub-agent thread"
+                    className="inline-flex items-center justify-center text-blue-500/80"
+                  >
+                    <GitBranchPlusIcon className="size-3" />
+                  </span>
+                }
+              />
+              <TooltipPopup side="top">Sub-agent thread</TooltipPopup>
+            </Tooltip>
+          )}
           {prStatus && (
             <Tooltip>
               <TooltipTrigger

@@ -264,6 +264,7 @@ const WsRpcLayer = WsRpcGroup.toLayer(
               interactionMode: bootstrap.createThread.interactionMode,
               branch: bootstrap.createThread.branch,
               worktreePath: bootstrap.createThread.worktreePath,
+              parentThreadId: bootstrap.createThread.parentThreadId ?? null,
               createdAt: bootstrap.createThread.createdAt,
             });
             createdThread = true;
