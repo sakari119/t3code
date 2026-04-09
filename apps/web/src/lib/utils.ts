@@ -73,3 +73,9 @@ export const resolveServerUrl = (options?: {
   }
   return parsedUrl.toString();
 };
+
+
+/** Builds the display title for a sub-agent thread. */
+export function buildSubAgentThreadTitle(parentTitle: string): string {
+  return `Sub-agent of: ${parentTitle}`;
+}

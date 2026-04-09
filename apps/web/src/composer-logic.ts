@@ -254,7 +254,7 @@ export function parseStandaloneComposerSlashCommand(
  * Returns the text to speak, or null if the input is not a /say command.
  */
 export function parseSayComposerCommand(text: string): string | null {
-  const match = /^\/say\s+(.+)$/is.exec(text.trim());
+  const match = /^\/say\s+(.+)$/i.exec(text.trim());
   return match?.[1]?.trim() ?? null;
 }
 

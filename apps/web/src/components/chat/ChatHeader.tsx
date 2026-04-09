@@ -14,6 +14,7 @@ import { Toggle } from "../ui/toggle";
 import { SidebarTrigger } from "../ui/sidebar";
 import { OpenInPicker } from "./OpenInPicker";
 import { Button } from "../ui/button";
+import { buildSubAgentThreadTitle } from "~/lib/utils";
 
 interface ChatHeaderProps {
   activeThreadId: ThreadId;
@@ -107,7 +108,7 @@ export const ChatHeader = memo(function ChatHeader({
             />
             <TooltipPopup side="bottom">
               {parentThreadTitle
-                ? `Sub-agent of: ${parentThreadTitle}`
+                ? buildSubAgentThreadTitle(parentThreadTitle)
                 : "Navigate to parent thread"}
             </TooltipPopup>
           </Tooltip>

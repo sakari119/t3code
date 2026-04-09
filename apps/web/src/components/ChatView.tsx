@@ -115,7 +115,7 @@ import {
   projectScriptIdFromCommand,
 } from "~/projectScripts";
 import { SidebarTrigger } from "./ui/sidebar";
-import { newCommandId, newMessageId, newThreadId } from "~/lib/utils";
+import { newCommandId, newMessageId, newThreadId, buildSubAgentThreadTitle } from "~/lib/utils";
 import { readNativeApi } from "~/nativeApi";
 import {
   getProviderModelCapabilities,
@@ -958,16 +958,23 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
   // Detect /say directives in agent messages when a turn completes and trigger TTS.
   const latestAssistantTurnId = activeLatestTurn?.turnId ?? null;
-  useEffect(() => {
-    if (!latestTurnSettled || !latestAssistantTurnId) return;
+  // Derive the latest settled assistant message for this turn to avoid scanning on every message update.
+  const latestSettledAssistantMessageText = useMemo(() => {
+    if (!latestTurnSettled || !latestAssistantTurnId) return null;
     const messages = activeThread?.messages ?? [];
     for (let i = messages.length - 1; i >= 0; i--) {
       const msg = messages[i];
-      if (!msg || msg.role !== "assistant" || msg.turnId !== latestAssistantTurnId) continue;
-      speakFromSayDirective(msg.text);
-      break;
+      if (msg && msg.role === "assistant" && msg.turnId === latestAssistantTurnId) {
+        return msg.text;
+      }
     }
+    return null;
   }, [latestTurnSettled, latestAssistantTurnId, activeThread?.messages]);
+  useEffect(() => {
+    if (latestSettledAssistantMessageText !== null) {
+      speakFromSayDirective(latestSettledAssistantMessageText);
+    }
+  }, [latestSettledAssistantMessageText]);
 
   const sessionProvider = activeThread?.session?.provider ?? null;
   const selectedProviderByThreadId = composerDraft.activeProvider ?? null;
@@ -3555,7 +3562,7 @@ export default function ChatView({ threadId }: ChatViewProps) {
 
     const createdAt = new Date().toISOString();
     const nextThreadId = newThreadId();
-    const subAgentTitle = `Sub-agent of: ${activeThread.title}`;
+    const subAgentTitle = buildSubAgentThreadTitle(activeThread.title);
 
     await api.orchestration
       .dispatchCommand({

@@ -29,7 +29,7 @@ export function cancelSpeech(): void {
 
 /** Extract the text content from a `/say <text>` directive at the beginning of a string. */
 export function parseSayDirective(text: string): string | null {
-  const match = /^\/say\s+(.+)$/im.exec(text.trim());
+  const match = /^\/say\s+(.+)$/i.exec(text.trim());
   return match?.[1]?.trim() ?? null;
 }
 
