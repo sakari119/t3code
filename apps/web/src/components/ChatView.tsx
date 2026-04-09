@@ -38,6 +38,7 @@ import {
   detectComposerTrigger,
   expandCollapsedComposerCursor,
   parseStandaloneComposerSlashCommand,
+  parseSayComposerCommand,
   replaceTextRange,
 } from "../composer-logic";
 import {
@@ -65,7 +66,7 @@ import {
   type PendingUserInputDraftAnswer,
 } from "../pendingUserInput";
 import { useStore } from "../store";
-import { createThreadSelector } from "../storeSelectors";
+import { createSidebarThreadSummarySelector, createThreadSelector } from "../storeSelectors";
 import { useUiStateStore } from "../uiStateStore";
 import {
   buildPlanImplementationThreadTitle,
@@ -114,7 +115,7 @@ import {
   projectScriptIdFromCommand,
 } from "~/projectScripts";
 import { SidebarTrigger } from "./ui/sidebar";
-import { newCommandId, newMessageId, newThreadId } from "~/lib/utils";
+import { newCommandId, newMessageId, newThreadId, buildSubAgentThreadTitle } from "~/lib/utils";
 import { readNativeApi } from "~/nativeApi";
 import {
   getProviderModelCapabilities,
@@ -124,6 +125,7 @@ import {
 import { useSettings } from "../hooks/useSettings";
 import { resolveAppModelSelection } from "../modelSelection";
 import { isTerminalFocused } from "../lib/terminalFocus";
+import { speak, speakFromSayDirective } from "../lib/tts";
 import {
   type ComposerImageAttachment,
   type DraftThreadEnvMode,
@@ -800,6 +802,17 @@ export default function ChatView({ threadId }: ChatViewProps) {
   const isServerThread = serverThread !== undefined;
   const isLocalDraftThread = !isServerThread && localDraftThread !== undefined;
   const canCheckoutPullRequestIntoThread = isLocalDraftThread;
+  const parentThreadId = activeThread?.parentThreadId ?? null;
+  const parentThreadSummary = useStore(
+    useMemo(
+      () =>
+        createSidebarThreadSummarySelector(
+          parentThreadId ? (parentThreadId as ThreadId) : null,
+        ),
+      [parentThreadId],
+    ),
+  );
+  const parentThreadTitle = parentThreadSummary?.title ?? null;
   const diffOpen = rawSearch.diff === "1";
   const activeThreadId = activeThread?.id ?? null;
   const existingOpenTerminalThreadIds = useMemo(() => {
@@ -942,6 +955,26 @@ export default function ChatView({ threadId }: ChatViewProps) {
     markThreadVisited,
     serverThread?.id,
   ]);
+
+  // Detect /say directives in agent messages when a turn completes and trigger TTS.
+  const latestAssistantTurnId = activeLatestTurn?.turnId ?? null;
+  // Derive the latest settled assistant message for this turn to avoid scanning on every message update.
+  const latestSettledAssistantMessageText = useMemo(() => {
+    if (!latestTurnSettled || !latestAssistantTurnId) return null;
+    const messages = activeThread?.messages ?? [];
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg && msg.role === "assistant" && msg.turnId === latestAssistantTurnId) {
+        return msg.text;
+      }
+    }
+    return null;
+  }, [latestTurnSettled, latestAssistantTurnId, activeThread?.messages]);
+  useEffect(() => {
+    if (latestSettledAssistantMessageText !== null) {
+      speakFromSayDirective(latestSettledAssistantMessageText);
+    }
+  }, [latestSettledAssistantMessageText]);
 
   const sessionProvider = activeThread?.session?.provider ?? null;
   const selectedProviderByThreadId = composerDraft.activeProvider ?? null;
@@ -1436,6 +1469,13 @@ export default function ChatView({ threadId }: ChatViewProps) {
           command: "default",
           label: "/default",
           description: "Switch this thread back to normal build mode",
+        },
+        {
+          id: "slash:say",
+          type: "slash-command",
+          command: "say",
+          label: "/say",
+          description: "Speak text aloud using text-to-speech (e.g. /say Task complete)",
         },
       ] satisfies ReadonlyArray<Extract<ComposerCommandItem, { type: "slash-command" }>>;
       const query = composerTrigger.query.trim().toLowerCase();
@@ -2853,6 +2893,19 @@ export default function ChatView({ threadId }: ChatViewProps) {
       setComposerTrigger(null);
       return;
     }
+    const sayText =
+      composerImages.length === 0 && sendableComposerTerminalContexts.length === 0
+        ? parseSayComposerCommand(trimmed)
+        : null;
+    if (sayText !== null) {
+      speak(sayText);
+      promptRef.current = "";
+      clearComposerDraftContent(activeThread.id);
+      setComposerHighlightedItemId(null);
+      setComposerCursor(0);
+      setComposerTrigger(null);
+      return;
+    }
     if (!hasSendableContent) {
       if (expiredTerminalContextCount > 0) {
         const toastCopy = buildExpiredTerminalContextToastCopy(
@@ -3496,6 +3549,56 @@ export default function ChatView({ threadId }: ChatViewProps) {
     selectedModel,
   ]);
 
+  const onNavigateToParentThread = useCallback(
+    (parentThreadId: string) => {
+      void navigate({ to: "/$threadId", params: { threadId: parentThreadId } });
+    },
+    [navigate],
+  );
+
+  const onNewSubAgent = useCallback(async () => {
+    const api = readNativeApi();
+    if (!api || !activeThread || !activeProject || !isServerThread) return;
+
+    const createdAt = new Date().toISOString();
+    const nextThreadId = newThreadId();
+    const subAgentTitle = buildSubAgentThreadTitle(activeThread.title);
+
+    await api.orchestration
+      .dispatchCommand({
+        type: "thread.create",
+        commandId: newCommandId(),
+        threadId: nextThreadId,
+        projectId: activeProject.id,
+        title: truncate(subAgentTitle),
+        modelSelection: selectedModelSelection,
+        runtimeMode,
+        interactionMode: activeThread.interactionMode,
+        branch: activeThread.branch,
+        worktreePath: activeThread.worktreePath,
+        parentThreadId: activeThread.id,
+        createdAt,
+      })
+      .then(async () => {
+        await navigate({ to: "/$threadId", params: { threadId: nextThreadId } });
+      })
+      .catch((err: unknown) => {
+        toastManager.add({
+          type: "error",
+          title: "Could not create sub-agent thread",
+          description:
+            err instanceof Error ? err.message : "An error occurred while creating the sub-agent.",
+        });
+      });
+  }, [
+    activeProject,
+    activeThread,
+    isServerThread,
+    navigate,
+    runtimeMode,
+    selectedModelSelection,
+  ]);
+
   const onProviderModelSelect = useCallback(
     (provider: ProviderKind, model: string) => {
       if (!activeThread) return;
@@ -3677,6 +3780,24 @@ export default function ChatView({ threadId }: ChatViewProps) {
       if (item.type === "slash-command") {
         if (item.command === "model") {
           const replacement = "/model ";
+          const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
+            snapshot.value,
+            trigger.rangeEnd,
+            replacement,
+          );
+          const applied = applyPromptReplacement(
+            trigger.rangeStart,
+            replacementRangeEnd,
+            replacement,
+            { expectedText: snapshot.value.slice(trigger.rangeStart, replacementRangeEnd) },
+          );
+          if (applied) {
+            setComposerHighlightedItemId(null);
+          }
+          return;
+        }
+        if (item.command === "say") {
+          const replacement = "/say ";
           const replacementRangeEnd = extendReplacementRangeForTrailingSpace(
             snapshot.value,
             trigger.rangeEnd,
@@ -3909,6 +4030,9 @@ export default function ChatView({ threadId }: ChatViewProps) {
           diffToggleShortcutLabel={diffPanelShortcutLabel}
           gitCwd={gitCwd}
           diffOpen={diffOpen}
+          parentThreadId={parentThreadId}
+          parentThreadTitle={parentThreadTitle}
+          canSpawnSubAgent={isServerThread && activeProject !== undefined}
           onRunProjectScript={(script) => {
             void runProjectScript(script);
           }}
@@ -3917,6 +4041,8 @@ export default function ChatView({ threadId }: ChatViewProps) {
           onDeleteProjectScript={deleteProjectScript}
           onToggleTerminal={toggleTerminalVisibility}
           onToggleDiff={onToggleDiff}
+          onNavigateToParentThread={onNavigateToParentThread}
+          onNewSubAgent={() => void onNewSubAgent()}
         />
       </header>
 
