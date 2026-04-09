@@ -14,5 +14,6 @@ declare global {
   interface Window {
     nativeApi?: NativeApi;
     desktopBridge?: DesktopBridge;
+    __t3WsToken?: string;
   }
 }
