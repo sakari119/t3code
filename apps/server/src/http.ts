@@ -22,6 +22,20 @@ import { decodeOtlpTraceRecords } from "./observability/TraceRecord.ts";
 import { BrowserTraceCollector } from "./observability/Services/BrowserTraceCollector.ts";
 import { ProjectFaviconResolver } from "./project/Services/ProjectFaviconResolver";
 
+const INJECT_MARKER = "</head>";
+
+function injectWsTokenIntoHtml(html: Uint8Array, wsToken: string): Uint8Array {
+  const text = new TextDecoder().decode(html);
+  const markerIndex = text.indexOf(INJECT_MARKER);
+  if (markerIndex === -1) {
+    return html;
+  }
+  const escapedToken = JSON.stringify(wsToken);
+  const scriptTag = `<script>window.__t3WsToken=${escapedToken};</script>`;
+  const injected = text.slice(0, markerIndex) + scriptTag + text.slice(markerIndex);
+  return new TextEncoder().encode(injected);
+}
+
 const PROJECT_FAVICON_CACHE_CONTROL = "public, max-age=3600";
 const FALLBACK_PROJECT_FAVICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#6b728080" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" data-fallback="project-favicon"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2Z"/></svg>`;
 const OTLP_TRACES_PROXY_PATH = "/api/observability/v1/traces";
@@ -248,7 +262,10 @@ export const staticAndDevRouteLayer = HttpRouter.add(
       if (!indexData) {
         return HttpServerResponse.text("Not Found", { status: 404 });
       }
-      return HttpServerResponse.uint8Array(indexData, {
+      const htmlData = config.authToken
+        ? injectWsTokenIntoHtml(indexData, config.authToken)
+        : indexData;
+      return HttpServerResponse.uint8Array(htmlData, {
         status: 200,
         contentType: "text/html; charset=utf-8",
       });
@@ -262,7 +279,11 @@ export const staticAndDevRouteLayer = HttpRouter.add(
       return HttpServerResponse.text("Internal Server Error", { status: 500 });
     }
 
-    return HttpServerResponse.uint8Array(data, {
+    const isHtml = contentType.startsWith("text/html");
+    const responseData = isHtml && config.authToken
+      ? injectWsTokenIntoHtml(data, config.authToken)
+      : data;
+    return HttpServerResponse.uint8Array(responseData, {
       status: 200,
       contentType,
     });
